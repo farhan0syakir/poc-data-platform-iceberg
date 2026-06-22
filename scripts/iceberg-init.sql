@@ -1,7 +1,9 @@
 -- Iceberg initialization using Spark SQL
--- Creates Iceberg tables in the MinIO warehouse and seeds them with sample data
+-- Creates Iceberg tables in Nessie and seeds them with sample data
 
-CREATE TABLE IF NOT EXISTS s3.default.customers (
+CREATE NAMESPACE IF NOT EXISTS nessie.default;
+
+CREATE TABLE IF NOT EXISTS nessie.default.customers (
   id INT,
   first_name STRING,
   last_name STRING,
@@ -11,9 +13,9 @@ CREATE TABLE IF NOT EXISTS s3.default.customers (
   updated_at TIMESTAMP
 )
 USING ICEBERG
-PARTITIONED BY (years(created_at), months(created_at));
+PARTITIONED BY (years(created_at));
 
-CREATE TABLE IF NOT EXISTS s3.default.products (
+CREATE TABLE IF NOT EXISTS nessie.default.products (
   id INT,
   name STRING,
   price DECIMAL(10, 2),
@@ -24,7 +26,7 @@ CREATE TABLE IF NOT EXISTS s3.default.products (
 USING ICEBERG
 PARTITIONED BY (category, years(created_at));
 
-CREATE TABLE IF NOT EXISTS s3.default.orders (
+CREATE TABLE IF NOT EXISTS nessie.default.orders (
   id INT,
   customer_id INT,
   order_date TIMESTAMP,
@@ -34,19 +36,19 @@ CREATE TABLE IF NOT EXISTS s3.default.orders (
   updated_at TIMESTAMP
 )
 USING ICEBERG
-PARTITIONED BY (years(order_date), months(order_date), status);
+PARTITIONED BY (years(order_date), status);
 
-INSERT INTO s3.default.customers VALUES
+INSERT INTO nessie.default.customers VALUES
   (1, 'John', 'Doe', 'john@example.com', '+1-555-0101', current_timestamp(), current_timestamp()),
   (2, 'Jane', 'Smith', 'jane@example.com', '+1-555-0102', current_timestamp(), current_timestamp());
 
-INSERT INTO s3.default.products VALUES
+INSERT INTO nessie.default.products VALUES
   (1, 'Laptop', 999.99, 'Electronics', current_timestamp(), current_timestamp()),
   (2, 'Mouse', 29.99, 'Electronics', current_timestamp(), current_timestamp());
 
-INSERT INTO s3.default.orders VALUES
+INSERT INTO nessie.default.orders VALUES
   (1, 1, current_timestamp(), 1329.97, 'delivered', current_timestamp(), current_timestamp()),
   (2, 2, current_timestamp(), 299.99, 'pending', current_timestamp(), current_timestamp());
 
-SHOW TABLES IN s3.default;
+SHOW TABLES IN nessie.default;
 

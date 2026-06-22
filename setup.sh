@@ -91,7 +91,7 @@ echo ""
 echo -e "${BLUE}Next steps:${NC}"
 echo "  1. Check Kafka topics: docker-compose exec kafka kafka-topics --bootstrap-server localhost:9092 --list"
 echo "  2. Monitor CDC events: http://localhost:8080 (Kafka UI)"
-echo "  3. Create Iceberg tables: docker-compose exec spark-master spark-submit --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.3.1 /tmp/iceberg-init.py"
+echo "  3. Create Iceberg tables: docker-compose exec spark-master /opt/spark/bin/spark-sql --master 'local[*]' --properties-file /opt/spark-conf/spark-defaults.conf --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.1,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 -f /tmp/iceberg-init.sql"
 echo "  4. Configure Metabase: http://localhost:8088 (add PostgreSQL data source)"
 echo ""
 

@@ -204,7 +204,7 @@ For production-like workloads:
 
 1. **Increase Kafka partitions**: Edit docker-compose.yml and adjust `KAFKA_NUM_PARTITIONS`
 2. **Increase Spark resources**: Modify `spark.driver.memory` and `spark.executor.memory`
-3. **Optimize Iceberg partitioning**: Adjust partition columns in `iceberg-init.py`
+3. **Optimize Iceberg partitioning**: Adjust partition columns in `scripts/iceberg-init.sql`
 4. **Enable dashboard caching**: Configure Redis in docker-compose.yml if needed
 
 ## Troubleshooting

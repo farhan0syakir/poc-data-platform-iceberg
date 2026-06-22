@@ -1,0 +1,266 @@
+services:
+  # PostgreSQL - Source database for CDC
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-source
+    environment:
+      POSTGRES_DB: sourcedb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "-c wal_level=logical -c max_wal_senders=10 -c max_replication_slots=10"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - data-platform
+
+  # Zookeeper - Required for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    networks:
+      - data-platform
+
+  # Kafka - Message broker for CDC
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG_RETENTION_HOURS: 24
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - data-platform
+
+  # Control Center - Kafka UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.1
+    container_name: kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - data-platform
+
+  # Kafka Connect - CDC connector
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:7.5.0
+    container_name: kafka-connect
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:9092
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: connect-cluster
+      CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluence
+    ports:
+      - "8083:8083"
+    volumes:
+      - ./connectors:/etc/kafka/connect/jars
+    networks:
+      - data-platform
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO - Local S3-compatible storage
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - data-platform
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Create MinIO bucket and configure it
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb myminio/iceberg --ignore-existing;
+      /usr/bin/mc mb myminio/warehouse --ignore-existing;
+      /usr/bin/mc mb myminio/data --ignore-existing;
+      /usr/bin/mc version enable myminio/iceberg;
+      /usr/bin/mc version enable myminio/warehouse;
+      /usr/bin/mc version enable myminio/data;
+      exit 0;
+      "
+    networks:
+      - data-platform
+
+  # Nessie Catalog Server - Iceberg metadata service
+  nessie:
+    image: ghcr.io/projectnessie/nessie:0.72.0
+    container_name: nessie
+    ports:
+      - "19120:19120"
+    environment:
+      NESSIE_VERSION_STORE_TYPE: INMEMORY
+    networks:
+      - data-platform
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:19120/api/v1/config"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Spark - For Iceberg operations and transformations
+  spark-master:
+    image: bitnami/spark:3.4.0
+    container_name: spark-master
+    environment:
+      SPARK_MODE: master
+      SPARK_RPC_AUTHENTICATION_ENABLED: 'no'
+      SPARK_RPC_ENCRYPTION_ENABLED: 'no'
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: 'no'
+      SPARK_SSL_ENABLED: 'no'
+      SPARK_USER: spark
+    ports:
+      - "8888:8080"
+      - "7077:7077"
+    volumes:
+      - ./scripts/spark-defaults.conf:/opt/spark-conf/spark-defaults.conf
+      - ./scripts/iceberg-init.py:/tmp/iceberg-init.py
+    networks:
+      - data-platform
+
+  spark-worker:
+    image: bitnami/spark:3.4.0
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_MEMORY: 2G
+      SPARK_WORKER_CORES: 2
+      SPARK_RPC_AUTHENTICATION_ENABLED: 'no'
+      SPARK_RPC_ENCRYPTION_ENABLED: 'no'
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: 'no'
+      SPARK_SSL_ENABLED: 'no'
+      SPARK_USER: spark
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./scripts/spark-defaults.conf:/opt/spark-conf/spark-defaults.conf
+    networks:
+      - data-platform
+
+  # Apache Superset - Dashboard & BI tool
+  superset:
+    image: apache/superset:3.0.0
+    container_name: superset
+    depends_on:
+      - postgres
+    environment:
+      SUPERSET_SECRET_KEY: 'your-secret-key-change-this-in-production'
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: sourcedb
+      SUPERSET_LOAD_EXAMPLES: 'no'
+    ports:
+      - "8088:8088"
+    volumes:
+      - superset_data:/var/lib/superset
+      - ./scripts/superset-init.sh:/tmp/superset-init.sh
+    command: >
+      sh -c "
+      superset db upgrade &&
+      superset fab create-admin --username admin --firstname Admin --lastname User --email admin@superset.com --password admin 2>/dev/null || true &&
+      superset init &&
+      superset run -h 0.0.0.0 -p 8088
+      "
+    networks:
+      - data-platform
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # Adminer - Database management UI for PostgreSQL
+  adminer:
+    image: adminer:4.8.1
+    container_name: adminer
+    depends_on:
+      - postgres
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    networks:
+      - data-platform
+
+volumes:
+  postgres_data:
+  zookeeper_data:
+  kafka_data:
+  minio_data:
+  superset_data:
+
+networks:
+  data-platform:
+    driver: bridge
+

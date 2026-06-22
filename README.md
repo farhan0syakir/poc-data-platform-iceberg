@@ -1,0 +1,287 @@
+# Data Platform with Iceberg, CDC, Local S3, and Dashboard
+
+A comprehensive Docker Compose setup that simulates a complete data platform with PostgreSQL, CDC (Kafka Connect), Iceberg, local MinIO S3, and Apache Superset dashboard.
+
+## Architecture
+
+```
+PostgreSQL (CDC Source)
+         ↓
+    Kafka Connect (Debezium CDC)
+         ↓
+      Kafka Topics
+         ↓
+Spark + Iceberg (Warehouse)
+         ↓
+    MinIO (S3 Storage)
+         ↓
+  Apache Superset (Dashboard)
+```
+
+## Services
+
+- **PostgreSQL**: Source database with sample data and logical replication support
+- **Zookeeper**: Coordination service for Kafka
+- **Kafka**: Message broker for CDC events
+- **Kafka UI**: Web interface for Kafka management (port 8080)
+- **Kafka Connect**: Connectors for capturing changes from PostgreSQL using Debezium
+- **MinIO**: S3-compatible object storage (local)
+- **Nessie**: Iceberg metadata catalog server
+- **Spark Master/Worker**: Execution engine for Iceberg operations
+- **Apache Superset**: Open-source data visualization and dashboarding platform
+- **Adminer**: Web-based database manager for PostgreSQL
+
+## Quick Start
+
+### 1. Prerequisites
+
+- Docker
+- Docker Compose
+- ~8GB free RAM (recommended)
+
+### 2. Download Kafka Connect Connectors
+
+First, download the Debezium PostgreSQL connector:
+
+```bash
+bash scripts/download-connectors.sh
+```
+
+### 3. Start All Services
+
+```bash
+docker-compose up -d
+```
+
+Monitor the startup:
+
+```bash
+docker-compose logs -f
+```
+
+Wait for all services to be healthy (usually 1-2 minutes).
+
+### 4. Verify Services Are Running
+
+```bash
+docker-compose ps
+```
+
+## Access the Services
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| **Apache Superset** (Dashboard) | http://localhost:8088 | admin / admin |
+| **Kafka UI** | http://localhost:8080 | - |
+| **MinIO Console** | http://localhost:9001 | minioadmin / minioadmin |
+| **Adminer** (Database UI) | http://localhost:8081 | - |
+| **Spark Master** | http://localhost:8888 | - |
+| **Postgres** | localhost:5432 | postgres / postgres |
+| **Kafka** | localhost:9092 | - |
+| **Nessie API** | http://localhost:19120 | - |
+
+## Configuration
+
+### Step 1: Create Kafka Connect CDC Connector
+
+After all services are running, create the CDC connector:
+
+```bash
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d @scripts/postgres-cdc-connector.json
+```
+
+Verify the connector is created:
+
+```bash
+curl http://localhost:8083/connectors
+```
+
+Check connector status:
+
+```bash
+curl http://localhost:8083/connectors/postgres-cdc-connector/status
+```
+
+### Step 2: Monitor CDC Events in Kafka UI
+
+Open http://localhost:8080 and navigate to Topics to see the CDC events being captured:
+- `cdc.customers`
+- `cdc.products`
+- `cdc.orders`
+
+### Step 3: Create Iceberg Tables in Spark
+
+Submit the Iceberg initialization job:
+
+```bash
+docker-compose exec spark-master spark-submit \
+  --master spark://spark-master:7077 \
+  --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.3.1,org.apache.hadoop:hadoop-aws:3.3.4,software.amazon.java:aws-java-sdk-bundle:1.12.261 \
+  /tmp/iceberg-init.py
+```
+
+### Step 4: Configure Superset Dashboards
+
+1. Open http://localhost:8088
+2. Log in with admin / admin
+3. Navigate to Data → Databases
+4. Click `+ Database` button
+5. Select PostgreSQL and configure:
+   - Host: `postgres`
+   - Port: `5432`
+   - Database: `testdb`
+   - Username: `postgres`
+   - Password: `postgres`
+6. Test and save the connection
+
+### Step 5: Create Dashboards in Superset
+
+1. Navigate to SQL Lab → SQL Editor
+2. Select the PostgreSQL database
+3. Run queries on `customers`, `products`, and `orders` tables
+4. Create charts and dashboards from query results
+
+## Database Tables
+
+### Customers
+```sql
+SELECT * FROM customers;
+```
+
+### Products
+```sql
+SELECT * FROM products;
+```
+
+### Orders
+```sql
+SELECT * FROM orders;
+```
+
+## Generate Test Data Changes for CDC
+
+To test the CDC pipeline, insert new data into PostgreSQL:
+
+```bash
+# Connect to PostgreSQL
+psql -h localhost -U postgres -d testdb -c "
+  INSERT INTO customers (first_name, last_name, email) VALUES ('Test', 'User', 'test@example.com');
+  INSERT INTO products (name, price, category) VALUES ('Test Product', 99.99, 'Test');
+  INSERT INTO orders (customer_id, total_amount, status) VALUES (1, 199.99, 'pending');
+"
+```
+
+Watch the changes flow through Kafka:
+1. Open Kafka UI (http://localhost:8080)
+2. Navigate to Topics
+3. Select `cdc.customers`, `cdc.products`, or `cdc.orders`
+4. View messages in real-time
+
+## Useful Commands
+
+### View PostgreSQL logs
+```bash
+docker-compose logs postgres
+```
+
+### View Kafka Connect logs
+```bash
+docker-compose logs kafka-connect
+```
+
+### View Kafka logs
+```bash
+docker-compose logs kafka
+```
+
+### Connect to PostgreSQL
+```bash
+docker-compose exec postgres psql -U postgres -d testdb
+```
+
+### View Kafka topics
+```bash
+docker-compose exec kafka kafka-topics --bootstrap-server localhost:9092 --list
+```
+
+### Consume messages from a topic
+```bash
+docker-compose exec kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic cdc.customers \
+  --from-beginning
+```
+
+### Check Kafka Connect connectors
+```bash
+curl http://localhost:8083/connectors
+```
+
+### Delete a connector
+```bash
+curl -X DELETE http://localhost:8083/connectors/postgres-cdc-connector
+```
+
+## Performance Tuning
+
+For production-like workloads:
+
+1. **Increase Kafka partitions**: Edit docker-compose.yml and adjust `KAFKA_NUM_PARTITIONS`
+2. **Increase Spark resources**: Modify `spark.driver.memory` and `spark.executor.memory`
+3. **Optimize Iceberg partitioning**: Adjust partition columns in `iceberg-init.py`
+4. **Enable Superset caching**: Configure Redis in docker-compose.yml
+
+## Troubleshooting
+
+### Kafka Connect won't start
+1. Ensure connectors are downloaded: `bash scripts/download-connectors.sh`
+2. Check logs: `docker-compose logs kafka-connect`
+
+### CDC connector fails
+1. Verify PostgreSQL is running: `docker-compose logs postgres`
+2. Check PostgreSQL logical replication: `psql -U postgres -c "SHOW wal_level;"`
+3. Verify publication exists: `psql -d testdb -c "\dP+"`
+
+### MinIO access issues
+1. Ensure MinIO bucket is created: Check MinIO Console at http://localhost:9001
+2. Verify S3 credentials in Spark config
+
+### Superset can't connect to PostgreSQL
+1. Check network connectivity: `docker-compose exec superset ping postgres`
+2. Verify database exists: `docker-compose exec postgres psql -l`
+
+## Cleanup
+
+Stop and remove all containers:
+
+```bash
+docker-compose down
+```
+
+Remove volumes (BE CAREFUL - deletes all data):
+
+```bash
+docker-compose down -v
+```
+
+## Next Steps
+
+1. **Create more complex schemas**: Add dimensions, facts, and slowly changing dimensions
+2. **Set up Spark jobs**: Create Spark jobs to transform and enrich Iceberg tables
+3. **Advanced analytics**: Use PySpark to create ML models on Iceberg data
+4. **Real-time dashboards**: Create Superset dashboards with real-time data refresh
+5. **Data quality monitoring**: Add Great Expectations for data quality checks
+6. **Cost optimization**: Configure Iceberg compaction and maintenance tasks
+7. **Multi-cloud setup**: Extend to use cloud S3 instead of MinIO
+
+## References
+
+- [Apache Iceberg Documentation](https://iceberg.apache.org/)
+- [Debezium Documentation](https://debezium.io/)
+- [Apache Kafka Documentation](https://kafka.apache.org/documentation/)
+- [Apache Superset Documentation](https://superset.apache.org/docs/intro)
+- [MinIO Documentation](https://docs.min.io/)
+- [PySpark Documentation](https://spark.apache.org/docs/latest/api/python/)
+

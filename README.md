@@ -1,6 +1,6 @@
-# Data Platform with Iceberg, CDC, Local S3, and Dashboard
+# Data Platform with Iceberg, CDC, Local S3, and BI
 
-A comprehensive Docker Compose setup that simulates a complete data platform with PostgreSQL, CDC (Kafka Connect), Iceberg, local MinIO S3, and a Metabase dashboard.
+A comprehensive Docker Compose setup that simulates a complete data platform with PostgreSQL, CDC (Kafka Connect), Iceberg, local MinIO S3, Metabase, and Dremio OSS.
 
 ## Architecture
 
@@ -15,7 +15,7 @@ Spark + Iceberg (Warehouse)
          ↓
     MinIO (S3 Storage)
          ↓
-  Metabase (Dashboard)
+  Metabase / Dremio (BI + SQL)
 ```
 
 ## Services
@@ -29,6 +29,7 @@ Spark + Iceberg (Warehouse)
 - **Nessie**: Iceberg metadata catalog server
 - **Spark Master/Worker**: Execution engine for Iceberg operations
 - **Metabase**: Open-source data visualization and dashboarding platform
+- **Dremio OSS**: SQL query engine and semantic layer for lakehouse datasets
 - **Adminer**: Web-based database manager for PostgreSQL
 
 ## Quick Start
@@ -58,6 +59,7 @@ docker-compose logs -f
 | Service | URL | Credentials |
 |---------|-----|-------------|
 | **Metabase** (Dashboard) | http://localhost:8088 | Initial setup wizard |
+| **Dremio OSS** | http://localhost:9047 | Create admin user on first login |
 | **Kafka UI** | http://localhost:8080 | - |
 | **MinIO Console** | http://localhost:9001 | minioadmin / minioadmin |
 | **Adminer** (Database UI) | http://localhost:8082 | - |
@@ -116,6 +118,13 @@ This step writes Iceberg metadata and sample rows into MinIO, so the bucket will
 2. Select the PostgreSQL database
 3. Run queries on `customers`, `products`, and `orders` tables
 4. Create charts, saved questions, and dashboards from query results
+
+### Step 6: Configure Dremio (Optional)
+
+1. Open http://localhost:9047
+2. Create the initial admin account
+3. Add object storage source (MinIO) and Nessie catalog if you want branch-aware Iceberg exploration
+4. Query your tables from the SQL Runner
 
 ## Database Tables
 

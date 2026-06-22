@@ -235,6 +235,25 @@ services:
       timeout: 10s
       retries: 5
 
+  # Dremio OSS - Lakehouse SQL engine and semantic layer
+  dremio:
+    image: dremio/dremio-oss:24.3.0
+    platform: linux/amd64
+    container_name: dremio
+    depends_on:
+      - minio
+      - nessie
+    ports:
+      - "9047:9047"
+      - "31010:31010"
+    environment:
+      DREMIO_MAX_HEAP_MEMORY_SIZE_MB: 2048
+      DREMIO_MAX_DIRECT_MEMORY_SIZE_MB: 4096
+    volumes:
+      - dremio_data:/opt/dremio/data
+    networks:
+      - data-platform
+
   # Adminer - Database management UI for PostgreSQL
   adminer:
     image: adminer:4.8.1
@@ -254,6 +273,7 @@ volumes:
   kafka_data:
   minio_data:
   metabase_data:
+  dremio_data:
 
 networks:
   data-platform:

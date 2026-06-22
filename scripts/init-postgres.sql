@@ -1,5 +1,3 @@
--- Enable logical replication for CDC
-ALTER SYSTEM SET wal_level to logical;
 
 -- Create sample database and tables for CDC testing
 CREATE DATABASE testdb;

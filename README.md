@@ -1,6 +1,6 @@
 # Data Platform with Iceberg, CDC, Local S3, and Dashboard
 
-A comprehensive Docker Compose setup that simulates a complete data platform with PostgreSQL, CDC (Kafka Connect), Iceberg, local MinIO S3, and Apache Superset dashboard.
+A comprehensive Docker Compose setup that simulates a complete data platform with PostgreSQL, CDC (Kafka Connect), Iceberg, local MinIO S3, and a Metabase dashboard.
 
 ## Architecture
 
@@ -15,7 +15,7 @@ Spark + Iceberg (Warehouse)
          ↓
     MinIO (S3 Storage)
          ↓
-  Apache Superset (Dashboard)
+  Metabase (Dashboard)
 ```
 
 ## Services
@@ -28,7 +28,7 @@ Spark + Iceberg (Warehouse)
 - **MinIO**: S3-compatible object storage (local)
 - **Nessie**: Iceberg metadata catalog server
 - **Spark Master/Worker**: Execution engine for Iceberg operations
-- **Apache Superset**: Open-source data visualization and dashboarding platform
+- **Metabase**: Open-source data visualization and dashboarding platform
 - **Adminer**: Web-based database manager for PostgreSQL
 
 ## Quick Start
@@ -39,42 +39,28 @@ Spark + Iceberg (Warehouse)
 - Docker Compose
 - ~8GB free RAM (recommended)
 
-### 2. Download Kafka Connect Connectors
+### 2. Start Everything
 
-First, download the Debezium PostgreSQL connector:
-
-```bash
-bash scripts/download-connectors.sh
-```
-
-### 3. Start All Services
+Use the single setup script to download connectors, start services, and create the CDC connector:
 
 ```bash
-docker-compose up -d
+./setup.sh
 ```
 
-Monitor the startup:
+If you want to watch startup logs while it runs, open another terminal and run:
 
 ```bash
 docker-compose logs -f
-```
-
-Wait for all services to be healthy (usually 1-2 minutes).
-
-### 4. Verify Services Are Running
-
-```bash
-docker-compose ps
 ```
 
 ## Access the Services
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| **Apache Superset** (Dashboard) | http://localhost:8088 | admin / admin |
+| **Metabase** (Dashboard) | http://localhost:8088 | Initial setup wizard |
 | **Kafka UI** | http://localhost:8080 | - |
 | **MinIO Console** | http://localhost:9001 | minioadmin / minioadmin |
-| **Adminer** (Database UI) | http://localhost:8081 | - |
+| **Adminer** (Database UI) | http://localhost:8082 | - |
 | **Spark Master** | http://localhost:8888 | - |
 | **Postgres** | localhost:5432 | postgres / postgres |
 | **Kafka** | localhost:9092 | - |
@@ -82,25 +68,12 @@ docker-compose ps
 
 ## Configuration
 
-### Step 1: Create Kafka Connect CDC Connector
+### Step 1: Verify the CDC Connector
 
-After all services are running, create the CDC connector:
-
-```bash
-curl -X POST http://localhost:8083/connectors \
-  -H "Content-Type: application/json" \
-  -d @scripts/postgres-cdc-connector.json
-```
-
-Verify the connector is created:
+`./setup.sh` creates the connector for you. If you want to inspect it manually:
 
 ```bash
 curl http://localhost:8083/connectors
-```
-
-Check connector status:
-
-```bash
 curl http://localhost:8083/connectors/postgres-cdc-connector/status
 ```
 
@@ -122,26 +95,24 @@ docker-compose exec spark-master spark-submit \
   /tmp/iceberg-init.py
 ```
 
-### Step 4: Configure Superset Dashboards
+### Step 4: Complete Metabase Setup
 
 1. Open http://localhost:8088
-2. Log in with admin / admin
-3. Navigate to Data → Databases
-4. Click `+ Database` button
-5. Select PostgreSQL and configure:
+2. Complete the Metabase onboarding wizard
+3. Add PostgreSQL as a database and configure:
    - Host: `postgres`
    - Port: `5432`
    - Database: `testdb`
    - Username: `postgres`
    - Password: `postgres`
-6. Test and save the connection
+4. Test and save the connection
 
-### Step 5: Create Dashboards in Superset
+### Step 5: Create Dashboards in Metabase
 
-1. Navigate to SQL Lab → SQL Editor
+1. Use the Metabase question editor or native SQL editor
 2. Select the PostgreSQL database
 3. Run queries on `customers`, `products`, and `orders` tables
-4. Create charts and dashboards from query results
+4. Create charts, saved questions, and dashboards from query results
 
 ## Database Tables
 
@@ -231,7 +202,7 @@ For production-like workloads:
 1. **Increase Kafka partitions**: Edit docker-compose.yml and adjust `KAFKA_NUM_PARTITIONS`
 2. **Increase Spark resources**: Modify `spark.driver.memory` and `spark.executor.memory`
 3. **Optimize Iceberg partitioning**: Adjust partition columns in `iceberg-init.py`
-4. **Enable Superset caching**: Configure Redis in docker-compose.yml
+4. **Enable dashboard caching**: Configure Redis in docker-compose.yml if needed
 
 ## Troubleshooting
 
@@ -248,8 +219,8 @@ For production-like workloads:
 1. Ensure MinIO bucket is created: Check MinIO Console at http://localhost:9001
 2. Verify S3 credentials in Spark config
 
-### Superset can't connect to PostgreSQL
-1. Check network connectivity: `docker-compose exec superset ping postgres`
+### Metabase can't connect to PostgreSQL
+1. Check network connectivity: `docker-compose exec metabase ping postgres`
 2. Verify database exists: `docker-compose exec postgres psql -l`
 
 ## Cleanup
@@ -271,7 +242,7 @@ docker-compose down -v
 1. **Create more complex schemas**: Add dimensions, facts, and slowly changing dimensions
 2. **Set up Spark jobs**: Create Spark jobs to transform and enrich Iceberg tables
 3. **Advanced analytics**: Use PySpark to create ML models on Iceberg data
-4. **Real-time dashboards**: Create Superset dashboards with real-time data refresh
+4. **Real-time dashboards**: Create Metabase dashboards with real-time data refresh
 5. **Data quality monitoring**: Add Great Expectations for data quality checks
 6. **Cost optimization**: Configure Iceberg compaction and maintenance tasks
 7. **Multi-cloud setup**: Extend to use cloud S3 instead of MinIO
@@ -281,7 +252,7 @@ docker-compose down -v
 - [Apache Iceberg Documentation](https://iceberg.apache.org/)
 - [Debezium Documentation](https://debezium.io/)
 - [Apache Kafka Documentation](https://kafka.apache.org/documentation/)
-- [Apache Superset Documentation](https://superset.apache.org/docs/intro)
+- [Metabase Documentation](https://www.metabase.com/docs/latest/)
 - [MinIO Documentation](https://docs.min.io/)
 - [PySpark Documentation](https://spark.apache.org/docs/latest/api/python/)
 

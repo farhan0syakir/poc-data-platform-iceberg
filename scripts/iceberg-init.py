@@ -6,6 +6,7 @@ This script creates Iceberg tables from the CDC data
 
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DecimalType, TimestampType
+from datetime import datetime
 
 def create_spark_session():
     """Create Spark session with Iceberg configuration"""
@@ -25,7 +26,7 @@ def create_spark_session():
     return spark
 
 def create_iceberg_tables(spark):
-    """Create Iceberg tables for CDC data"""
+    """Create Iceberg tables for CDC data and seed them with sample rows"""
 
     # Create customers table
     customers_schema = StructType([
@@ -81,7 +82,24 @@ def create_iceberg_tables(spark):
         PARTITIONED BY (year(order_date), month(order_date), status)
     """)
 
-    print("Iceberg tables created successfully!")
+    customers = [
+        (1, "John", "Doe", "john@example.com", "+1-555-0101", datetime.utcnow(), datetime.utcnow()),
+        (2, "Jane", "Smith", "jane@example.com", "+1-555-0102", datetime.utcnow(), datetime.utcnow()),
+    ]
+    products = [
+        (1, "Laptop", 999.99, "Electronics", datetime.utcnow(), datetime.utcnow()),
+        (2, "Mouse", 29.99, "Electronics", datetime.utcnow(), datetime.utcnow()),
+    ]
+    orders = [
+        (1, 1, datetime.utcnow(), 1329.97, "delivered", datetime.utcnow(), datetime.utcnow()),
+        (2, 2, datetime.utcnow(), 299.99, "pending", datetime.utcnow(), datetime.utcnow()),
+    ]
+
+    spark.createDataFrame(customers, customers_schema).writeTo("s3.warehouse.customers").append()
+    spark.createDataFrame(products, ["id", "name", "price", "category", "created_at", "updated_at"]).writeTo("s3.warehouse.products").append()
+    spark.createDataFrame(orders, ["id", "customer_id", "order_date", "total_amount", "status", "created_at", "updated_at"]).writeTo("s3.warehouse.orders").append()
+
+    print("Iceberg tables created and seeded successfully!")
 
 if __name__ == "__main__":
     spark = create_spark_session()

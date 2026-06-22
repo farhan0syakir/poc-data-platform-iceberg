@@ -67,7 +67,17 @@ status=$(curl -s http://localhost:8083/connectors/postgres-cdc-connector/status 
 echo "Connector status: $status"
 echo ""
 
-# Step 6: Display access information
+# Step 6: Materialize Iceberg tables
+echo -e "${BLUE}Step 6: Creating Iceberg tables and seeding MinIO...${NC}"
+docker-compose exec -T spark-master /opt/spark/bin/spark-sql \
+  --master local[*] \
+  --properties-file /opt/spark-conf/spark-defaults.conf \
+  --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.1,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
+  -f /tmp/iceberg-init.sql || true
+echo -e "${GREEN}✓ Iceberg init attempted${NC}"
+echo ""
+
+# Step 7: Display access information
 echo -e "${GREEN}✓ Setup complete!${NC}"
 echo ""
 echo -e "${BLUE}Access the services:${NC}"

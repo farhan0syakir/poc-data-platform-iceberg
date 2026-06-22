@@ -90,10 +90,13 @@ Submit the Iceberg initialization job:
 
 ```bash
 docker-compose exec spark-master spark-submit \
-  --master spark://spark-master:7077 \
-  --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.3.1,org.apache.hadoop:hadoop-aws:3.3.4,software.amazon.java:aws-java-sdk-bundle:1.12.261 \
-  /tmp/iceberg-init.py
+  --master local[*] \
+  --properties-file /opt/spark-conf/spark-defaults.conf \
+  --packages org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.1,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
+  /tmp/iceberg-init.sql
 ```
+
+This step writes Iceberg metadata and sample rows into MinIO, so the bucket will only be empty before this Spark job runs.
 
 ### Step 4: Complete Metabase Setup
 
@@ -218,6 +221,7 @@ For production-like workloads:
 ### MinIO access issues
 1. Ensure MinIO bucket is created: Check MinIO Console at http://localhost:9001
 2. Verify S3 credentials in Spark config
+3. If the bucket exists but looks empty, run `./setup.sh` or rerun the Spark Iceberg init job above
 
 ### Metabase can't connect to PostgreSQL
 1. Check network connectivity: `docker-compose exec metabase ping postgres`

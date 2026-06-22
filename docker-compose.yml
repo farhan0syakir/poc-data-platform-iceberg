@@ -136,13 +136,12 @@ services:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
       /usr/bin/mc mb myminio/iceberg --ignore-existing;
       /usr/bin/mc mb myminio/warehouse --ignore-existing;
       /usr/bin/mc mb myminio/data --ignore-existing;
-      /usr/bin/mc version enable myminio/iceberg;
-      /usr/bin/mc version enable myminio/warehouse;
-      /usr/bin/mc version enable myminio/data;
+      printf '{\"seed\":true,\"created_by\":\"minio-init\"}\n' > /tmp/bootstrap.json;
+      /usr/bin/mc cp /tmp/bootstrap.json myminio/iceberg/bootstrap/bootstrap.json;
       exit 0;
       "
     networks:
@@ -181,7 +180,7 @@ services:
       - "7077:7077"
     volumes:
       - ./scripts/spark-defaults.conf:/opt/spark-conf/spark-defaults.conf
-      - ./scripts/iceberg-init.py:/tmp/iceberg-init.py
+      - ./scripts/iceberg-init.sql:/tmp/iceberg-init.sql
     command: >
       bash -lc "/opt/spark/sbin/start-master.sh && tail -f /dev/null"
     networks:

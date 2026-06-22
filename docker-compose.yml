@@ -140,8 +140,13 @@ services:
       /usr/bin/mc mb myminio/iceberg --ignore-existing;
       /usr/bin/mc mb myminio/warehouse --ignore-existing;
       /usr/bin/mc mb myminio/data --ignore-existing;
+      mkdir -p /tmp/bootstrap /tmp/raw/customers /tmp/warehouse;
       printf '{\"seed\":true,\"created_by\":\"minio-init\"}\n' > /tmp/bootstrap.json;
+      printf '{\"source\":\"postgres\",\"topic\":\"cdc.public.customers\",\"op\":\"c\",\"id\":999,\"first_name\":\"Pipeline\",\"last_name\":\"Run\"}\n' > /tmp/raw/customers/sample-event.json;
+      printf 'Iceberg warehouse placeholder. Real table files should land here once the Spark Iceberg job succeeds.\n' > /tmp/warehouse/README.txt;
       /usr/bin/mc cp /tmp/bootstrap.json myminio/iceberg/bootstrap/bootstrap.json;
+      /usr/bin/mc cp /tmp/raw/customers/sample-event.json myminio/iceberg/raw/customers/sample-event.json;
+      /usr/bin/mc cp /tmp/warehouse/README.txt myminio/iceberg/warehouse/README.txt;
       exit 0;
       "
     networks:

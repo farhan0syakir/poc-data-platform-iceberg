@@ -1,0 +1,4 @@
+rootProject.name = 'my-flink-job'
+
+include 'sink'
+include 'stream'

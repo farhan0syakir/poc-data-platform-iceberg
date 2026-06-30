@@ -5,7 +5,8 @@ services:
       - "8081:8081"
     command: jobmanager
     volumes:
-      - ./target:/opt/flink/usrlib
+      - ./sink/build/libs:/opt/flink/usrlib/sink
+      - ./stream/build/libs:/opt/flink/usrlib/stream
     environment:
       - |
         FLINK_PROPERTIES=

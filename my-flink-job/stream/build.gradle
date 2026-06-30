@@ -1,0 +1,6 @@
+// Stream module: generates messages and produces them into Kafka.
+shadowJar {
+    manifest {
+        attributes 'Main-Class': 'com.example.DataGeneratorJob'
+    }
+}

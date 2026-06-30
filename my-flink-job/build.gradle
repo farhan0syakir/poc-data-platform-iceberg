@@ -1,0 +1,60 @@
+plugins {
+    id 'java'
+    id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'com.github.johnrengelman.shadow'
+
+    group = 'com.example'
+    version = '1.0-SNAPSHOT'
+
+    ext {
+        flinkVersion = '1.19.0'
+        kafkaConnectorVersion = '3.3.0-1.19'
+        log4jVersion = '2.20.0'
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(17)
+        }
+    }
+
+    repositories {
+        mavenCentral()
+        maven {
+            url 'https://repository.apache.org/content/repositories/snapshots/'
+            mavenContent { snapshotsOnly() }
+        }
+    }
+
+    dependencies {
+        // Flink core dependencies are provided by the cluster -> compileOnly.
+        compileOnly "org.apache.flink:flink-streaming-java:${flinkVersion}"
+        compileOnly "org.apache.flink:flink-clients:${flinkVersion}"
+
+        // Connector dependencies must be bundled into the fat JAR.
+        implementation "org.apache.flink:flink-connector-kafka:${kafkaConnectorVersion}"
+
+        // Logging is provided by the Flink distribution at runtime.
+        runtimeOnly "org.apache.logging.log4j:log4j-slf4j-impl:${log4jVersion}"
+        runtimeOnly "org.apache.logging.log4j:log4j-api:${log4jVersion}"
+        runtimeOnly "org.apache.logging.log4j:log4j-core:${log4jVersion}"
+    }
+
+    // Produce a shaded fat JAR named "<module>-<version>.jar".
+    shadowJar {
+        archiveClassifier.set('')
+        mergeServiceFiles()
+        dependencies {
+            exclude(dependency('org.apache.flink:flink-shaded-force-shading'))
+            exclude(dependency('com.google.code.findbugs:jsr305'))
+            exclude(dependency('org.slf4j:.*'))
+            exclude(dependency('org.apache.logging.log4j:.*'))
+        }
+    }
+
+    build.dependsOn shadowJar
+}

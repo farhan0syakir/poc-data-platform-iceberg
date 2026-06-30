@@ -32,13 +32,13 @@ public class DataStreamJob {
 
 		KafkaSource<String> source = KafkaSource.<String>builder()
 			.setBootstrapServers("kafka:9092")
-			.setTopics("input-topic")
-			.setGroupId("my-group")
+			.setTopics("target")
+			.setGroupId("sink-group")
 			.setStartingOffsets(OffsetsInitializer.earliest())
 			.setValueOnlyDeserializer(new SimpleStringSchema())
 			.build();
 
-		DataStream<String> stream = env.fromSource(source, WatermarkStrategy.noWatermarks(), "Kafka Source");
+		DataStream<String> stream = env.fromSource(source, WatermarkStrategy.noWatermarks(), "Kafka Target Source");
 
 		stream.print();
 

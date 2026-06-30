@@ -63,3 +63,4 @@ temp/
 .DS_Store
 Thumbs.db
 
+/my-flink-job/target/*
